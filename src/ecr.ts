@@ -3,6 +3,8 @@ import {
   ECRClient,
   DescribeRepositoriesCommand,
   CreateRepositoryCommand,
+  GetLifecyclePolicyCommand,
+  GetRepositoryPolicyCommand,
   PutLifecyclePolicyCommand,
   SetRepositoryPolicyCommand,
   Repository,
@@ -33,7 +35,7 @@ export const runForECR = async (inputs: Inputs): Promise<Outputs> => {
   if (lifecyclePolicy !== undefined) {
     await core.group(
       `Put the lifecycle policy to repository ${inputs.repository}`,
-      async () => await putLifecyclePolicy(client, inputs.repository, lifecyclePolicy),
+      async () => await putLifecyclePolicyIfChanges(client, inputs.repository, lifecyclePolicy),
     )
   }
 
@@ -41,7 +43,7 @@ export const runForECR = async (inputs: Inputs): Promise<Outputs> => {
   if (repositoryPolicy !== undefined) {
     await core.group(
       `Put the repository policy to repository ${inputs.repository}`,
-      async () => await setRepositoryPolicy(client, inputs.repository, repositoryPolicy),
+      async () => await setRepositoryPolicyIfChanges(client, inputs.repository, repositoryPolicy),
     )
   }
 
@@ -74,18 +76,52 @@ const createRepositoryIfNotExist = async (client: ECRClient, name: string): Prom
 
 const isRepositoryNotFoundException = (e: unknown) => e instanceof Error && e.name === 'RepositoryNotFoundException'
 
-const putLifecyclePolicy = async (client: ECRClient, repositoryName: string, path: string): Promise<void> => {
+const putLifecyclePolicyIfChanges = async (client: ECRClient, repositoryName: string, path: string): Promise<void> => {
   const lifecyclePolicyText = await fs.readFile(path, { encoding: 'utf-8' })
-  core.debug(`putting the lifecycle policy ${path} to repository ${repositoryName}`)
+  core.debug(`Checking if lifecycle policy ${path} has changed for repository ${repositoryName}`)
 
-  await client.send(new PutLifecyclePolicyCommand({ repositoryName, lifecyclePolicyText }))
-  core.info(`successfully put lifecycle policy ${path} to repository ${repositoryName}`)
+  try {
+    const existingPolicyText = await client.send(new GetLifecyclePolicyCommand({ repositoryName }))
+    assert(existingPolicyText.lifecyclePolicyText !== undefined)
+
+    if (JSON.stringify(JSON.parse(lifecyclePolicyText)) !== JSON.stringify(JSON.parse(existingPolicyText.lifecyclePolicyText))) {
+      await client.send(new PutLifecyclePolicyCommand({ repositoryName, lifecyclePolicyText }))
+      core.info(`Successfully put lifecycle policy ${path} to repository ${repositoryName}`)
+    } else {
+      core.info(`Lifecycle policy ${path} for repository ${repositoryName} is already up to date`)
+    }
+  } catch (error) {
+    // If the repository has no existing policy, simply put the new policy
+    if (isRepositoryNotFoundException(error)) {
+      await client.send(new PutLifecyclePolicyCommand({ repositoryName, lifecyclePolicyText }))
+      core.info(`Successfully put lifecycle policy ${path} to repository ${repositoryName}`)
+    } else {
+      throw error
+    }
+  }
 }
 
-export const setRepositoryPolicy = async (client: ECRClient, repositoryName: string, path: string): Promise<void> => {
+const setRepositoryPolicyIfChanges = async (client: ECRClient, repositoryName: string, path: string): Promise<void> => {
   const policyText = await fs.readFile(path, { encoding: 'utf-8' })
-  core.debug(`setting the repository policy ${path} to repository ${repositoryName}`)
+  core.debug(`Checking if repository policy ${path} has changed for repository ${repositoryName}`)
 
-  await client.send(new SetRepositoryPolicyCommand({ repositoryName, policyText }))
-  core.info(`successfully set repository policy ${path} to repository ${repositoryName}`)
+  try {
+    const existingPolicyText = await client.send(new GetRepositoryPolicyCommand({ repositoryName }))
+    assert(existingPolicyText.policyText !== undefined)
+
+    if (JSON.stringify(JSON.parse(policyText)) !== JSON.stringify(JSON.parse(existingPolicyText.policyText))) {
+      await client.send(new SetRepositoryPolicyCommand({ repositoryName, policyText }))
+      core.info(`Successfully set repository policy ${path} to repository ${repositoryName}`)
+    } else {
+      core.info(`Repository policy ${path} for repository ${repositoryName} is already up to date`)
+    }
+  } catch (error) {
+    // If the repository has no existing policy, simply set the new policy
+    if (isRepositoryNotFoundException(error)) {
+      await client.send(new SetRepositoryPolicyCommand({ repositoryName, policyText }))
+      core.info(`Successfully set repository policy ${path} to repository ${repositoryName}`)
+    } else {
+      throw error
+    }
+  }
 }

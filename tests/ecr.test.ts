@@ -3,6 +3,8 @@ import {
   CreateRepositoryCommand,
   DescribeRepositoriesCommand,
   ECRClient,
+  GetLifecyclePolicyCommand,
+  GetRepositoryPolicyCommand,
   PutLifecyclePolicyCommand,
   SetRepositoryPolicyCommand,
 } from '@aws-sdk/client-ecr'
@@ -74,6 +76,15 @@ describe('Put a lifecycle policy', () => {
       .resolves({
         repositoryName: 'foobar',
       })
+    ecrMock.on(GetLifecyclePolicyCommand,
+      {
+        repositoryName: 'foobar',
+      }).resolves({
+        registryId:'123456789012',
+        repositoryName: 'foobar',
+        lifecyclePolicyText: `{ "rules": [{ "description": "dummy" }] }`,
+        lastEvaluatedAt: new Date(),
+      })
 
     const output = await runForECR({
       repository: 'foobar',
@@ -113,6 +124,14 @@ describe('Put a repository policy', () => {
       })
       .resolves({
         repositoryName: 'foobar',
+      })
+    ecrMock.on(GetRepositoryPolicyCommand,
+      {
+        repositoryName: 'foobar',
+      }).resolves({
+        registryId: '123456789012',
+        repositoryName: 'foobar',
+        policyText: `{ "Version": "2008-10-17", "Statement": [{"Sid": "AllowPull", "Effect": "Allow", "Principal": {"AWS": ["arn:aws:iam::012345678910:root"]}, "Action": ["ListImages"]}]}`,
       })
 
     const output = await runForECR({

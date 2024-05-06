@@ -17,6 +17,18 @@ test('ecr', async () => {
       },
     ],
   })
+  mocks.ecr.on(ecr.GetLifecyclePolicyCommand).resolves(
+    {
+      registryId:'123456789012',
+      repositoryName: 'foobar',
+      lifecyclePolicyText: `${__dirname}/fixtures/lifecycle-policy.json`,
+      lastEvaluatedAt: new Date(),
+  })
+  mocks.ecr.on(ecr.GetRepositoryPolicyCommand).resolves({
+    registryId: '123456789012',
+    repositoryName: 'foobar',
+    policyText: `${__dirname}/fixtures/lifecycle-policy.json`,
+  })  
   mocks.ecr.on(ecr.PutLifecyclePolicyCommand).resolves({
     repositoryName: 'foobar',
   })
