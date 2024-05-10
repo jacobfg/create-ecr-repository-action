@@ -50184,6 +50184,7 @@ const createRepositoryIfNotExist = async (client, name) => {
 };
 const isRepositoryNotFoundException = (e) => e instanceof Error && e.name === 'RepositoryNotFoundException';
 const isLifecyclePolicyNotFoundException = (e) => e instanceof Error && e.name === 'LifecyclePolicyNotFoundException';
+const isRepositoryPolicyNotFoundException = (e) => e instanceof Error && e.name === 'RepositoryPolicyNotFoundException';
 const putLifecyclePolicyIfChanges = async (client, repositoryName, path) => {
     const lifecyclePolicyText = await external_fs_.promises.readFile(path, { encoding: 'utf-8' });
     core.debug(`Checking if lifecycle policy ${path} has changed for repository ${repositoryName}`);
@@ -50225,7 +50226,7 @@ const setRepositoryPolicyIfChanges = async (client, repositoryName, path) => {
     }
     catch (error) {
         // If the repository has no existing policy, simply set the new policy
-        if (isRepositoryNotFoundException(error)) {
+        if (isRepositoryNotFoundException(error) || isRepositoryPolicyNotFoundException(error)) {
             await client.send(new dist_cjs.SetRepositoryPolicyCommand({ repositoryName, policyText }));
             core.info(`Successfully set repository policy ${path} to repository ${repositoryName}`);
         }
