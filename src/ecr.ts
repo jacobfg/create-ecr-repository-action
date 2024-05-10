@@ -75,6 +75,7 @@ const createRepositoryIfNotExist = async (client: ECRClient, name: string): Prom
 }
 
 const isRepositoryNotFoundException = (e: unknown) => e instanceof Error && e.name === 'RepositoryNotFoundException'
+const isLifecyclePolicyNotFoundException = (e: unknown) => e instanceof Error && e.name === 'LifecyclePolicyNotFoundException'
 
 const putLifecyclePolicyIfChanges = async (client: ECRClient, repositoryName: string, path: string): Promise<void> => {
   const lifecyclePolicyText = await fs.readFile(path, { encoding: 'utf-8' })
@@ -92,7 +93,7 @@ const putLifecyclePolicyIfChanges = async (client: ECRClient, repositoryName: st
     }
   } catch (error) {
     // If the repository has no existing policy, simply put the new policy
-    if (isRepositoryNotFoundException(error)) {
+    if (isRepositoryNotFoundException(error) || isLifecyclePolicyNotFoundException(error)) {
       await client.send(new PutLifecyclePolicyCommand({ repositoryName, lifecyclePolicyText }))
       core.info(`Successfully put lifecycle policy ${path} to repository ${repositoryName}`)
     } else {
